@@ -3,6 +3,9 @@
 #include "qthread.h"
 #include "qmessagebox.h"
 #include "qdatetime.h"
+#include "qfiledialog.h"
+#include "qsettings.h"
+#include "qdebug.h"
 
 using namespace QtCharts;
 
@@ -67,26 +70,28 @@ MainWindow::MainWindow(QWidget *parent) :
        /*坐标X轴*/
        x = new QValueAxis();
        /*10秒钟范围*/
-       x->setRange(0,5000);
+       x->setRange(X_WINDOWS_START,X_WINDOWS_START + X_WINDOWS_SIZE);
        x->setGridLineVisible(true);
-       x->setTickCount(11);
-       x->setTitleText("时间：MS");
+       x->setTickCount(X_WINDOWS_SIZE / X_WINDOWS_STEP + 1);
+       x->setTitleText("X轴");
 
        /*坐标Y轴*/
        y = new QValueAxis();
        /*-10kg到20kg*/
-       y->setRange(16740000,16750000);
+       y->setRange(Y_WINDOWS_START,Y_WINDOWS_START + Y_WINDOWS_SIZE);
        y->setGridLineVisible(true);
-       y->setTickCount(11);
-       y->setTitleText("重量：g");
+       y->setTickCount(Y_WINDOWS_SIZE / Y_WINDOWS_STEP + 1);
+       y->setTitleText("Y轴");
 
 
 
-       unsigned int color[communication::LINE_SERVICE_CNT]= { Qt::red,Qt::blue,Qt::green,Qt::yellow};
+       Qt::GlobalColor color[communication::LINE_SERVICE_CNT]= { Qt::red,Qt::green,Qt::yellow,Qt::blue};
 
        /*定义所有数据源*/
        for (int i = 0;i < communication::LINE_SERVICE_CNT; i++) {
            service[i] = new QLineSeries();
+           service[i]->setColor(color[i]);
+           service[i]->setName("未定义");
 
            service[i]->setUseOpenGL(true);
            service[i]->useOpenGL();
@@ -120,7 +125,7 @@ void MainWindow::on_start_button_clicked()
     port_name = ui->port_name_list->currentText();
     baudrates = ui->baudrates_list->currentText().toInt();
     databits = ui->databits_list->currentText().toInt();
-    parity = ui->parity_list->currentText().toInt();
+    parity = ui->parity_list->currentIndex();
 
     emit open_port(port_name,baudrates,databits,parity);
 }
@@ -185,10 +190,118 @@ void MainWindow::handle_notify_data_stream(QList<QPointF> line)
             s[i].removeFirst();
        }
        service[i]->replace(s[i]);
+       /*处理数据显示*/
+      ui->data_stream_display->append(QString::number(line[i].x(),'f',0) + "," + QString::number(line[i].y(),'f',0));
+    }
+   if (ui->data_stream_display->document()->lineCount() > 100) {
+       ui->data_stream_display->clear();
+
    }
+    if (offset > 0) {
+        x->setRange(x_min + offset,x_max + offset);
+    }
 
-     if (offset > 0) {
-         x->setRange(x_min + offset,x_max + offset);
-     }
 
+
+
+}
+
+void MainWindow::on_data_stream_display_textChanged()
+{
+     ui->data_stream_display->moveCursor(QTextCursor::End);
+}
+
+void MainWindow::parse_configration(QString file_name)
+{
+    /*解析颜色*/
+    QByteArray file_text;
+    QByteArray temp;
+
+    QString color;
+    QString split;
+    QString start,end;
+    int temp_index,split_index,start_index,end_index;
+
+
+    QFile *open_file = new QFile(file_name);
+    if (open_file->open(QIODevice::ReadOnly)) {
+        file_text = open_file->readAll();
+        if (file_text.contains("[color]")) {
+            temp_index = file_text.indexOf("[color]");
+            split_index = file_text.indexOf("=",temp_index);
+            start_index = file_text.indexOf("\"",split_index);
+
+
+        }
+    }
+
+}
+
+
+/*打开配置文件*/
+void MainWindow::on_open_configration_button_clicked()
+{
+
+    QString path;
+    /*上次路径*/
+    QSettings *setting = new QSettings("./Setting.ini", QSettings::IniFormat);  //QSettings能记录一些程序中的信息，下次再打开时可以读取出来
+    /*文件选择对话框*/
+    QFileDialog *file_dialog = new QFileDialog(this);
+
+    file_dialog->setWindowTitle("选择配置文件");
+
+    file_dialog->setDirectory(setting->value("last_file_path").toString());
+
+    file_dialog->setNameFilter(tr("配置文件(*.cfg)"));
+    //设置可以选择多个文件,默认为只能选择一个文件QFileDialog::ExistingFiles
+    file_dialog->setFileMode(QFileDialog::ExistingFile);
+    //设置视图模式
+    file_dialog->setViewMode(QFileDialog::Detail);
+
+
+    if (file_dialog->exec() ==  QDialog::Accepted) {
+        path = file_dialog->selectedFiles()[0];
+        if (!path.isEmpty()) {
+            setting->setValue("last_file_path",path);
+             parse_configration(path);
+        }
+
+    } else {
+        file_dialog->close();
+    }
+}
+
+/*保存配置文件*/
+void MainWindow::save_configration()
+{
+   QFile *new_file;
+   QByteArray new_text;
+
+   /*上次路径*/
+   QSettings *setting = new QSettings("./Setting.ini", QSettings::IniFormat);  //QSettings能记录一些程序中的信息，下次再打开时可以读取出来
+
+   QString file_name = QFileDialog::getSaveFileName(this, tr("保存配置文件"),setting->value("last_file_path").toString(), "*.cfg");
+        if (!file_name.isEmpty())
+        {
+            // 如果文件后缀为空，则默认使用.pdf
+            if (QFileInfo(file_name).suffix().isEmpty())
+            {
+                file_name.append(".cfg");
+            }
+         new_file = new QFile(file_name);
+         new_file->open(QIODevice::WriteOnly);
+
+         new_text = ui->configration_text_display->toPlainText().toUtf8();
+
+         new_file->write(new_text);
+
+         new_file->close();
+        }
+
+
+}
+
+void MainWindow::on_save_configration_button_clicked()
+{
+    save_configration();
 }

@@ -33,11 +33,16 @@ void communication::handle_data_ready()
     }
 
     /*解析数据*/
-    while ((index = m_buffer.indexOf('\r\n',0)) >= 0) {
+    while ((index = m_buffer.indexOf("\r\n",0)) >= 0) {
 
     temp = m_buffer.mid(0,index);
-    data_list = QString::fromLocal8Bit(temp).split(';');
+    m_buffer.remove(0,index + 2);
 
+    if (temp.size() == 0) {
+        continue;
+    }
+
+    data_list = QString::fromLocal8Bit(temp).split(';');
     for (int i = 0;i < data_list.size();i++) {
         value_list = data_list[i].split(',');
         /*只用2个*/
@@ -47,7 +52,7 @@ void communication::handle_data_ready()
         qDebug()<< QString("[data:%1]:%2.").arg(i).arg(data_list.at(i));
     }
     emit notify_data_stream(list);
-    m_buffer.remove(0,index + 2);
+
     }
 
 
@@ -89,6 +94,8 @@ void communication::handle_open_port(QString port_name,int baud_rates,int data_b
         if (success) {
             qDebug() << QString(port_name + "打开成功.");
             m_open = true;
+            m_serial->flush();
+
             emit rsp_open_port(SERIAL_SUCCESS,SERIAL_CODE_OPEN);/*发送成功信号*/
         } else {
             qDebug() << QString(port_name + "打开失败.");

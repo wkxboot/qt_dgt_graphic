@@ -20,7 +20,8 @@ public:
         SERIAL_FAIL = -1,
 
         LINE_SERVICE_CNT = 4,
-        SERVICE_DATA_CNT = 1000
+        SERVICE_DATA_CNT = 100,
+
 
     };
     QSerialPort *m_serial;
