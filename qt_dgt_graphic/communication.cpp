@@ -45,6 +45,9 @@ void communication::handle_data_ready()
     data_list = QString::fromLocal8Bit(temp).split(';');
     for (int i = 0;i < data_list.size();i++) {
         value_list = data_list[i].split(',');
+        if (value_list.size() < 2) {
+            continue;
+        }
         /*只用2个*/
         value.setX(value_list[0].toInt());
         value.setY(value_list[1].toInt());

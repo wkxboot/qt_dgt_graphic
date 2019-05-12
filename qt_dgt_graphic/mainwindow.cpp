@@ -6,6 +6,7 @@
 #include "qfiledialog.h"
 #include "qsettings.h"
 #include "qdebug.h"
+#include "qtextcodec.h"
 
 using namespace QtCharts;
 
@@ -61,6 +62,14 @@ MainWindow::MainWindow(QWidget *parent) :
        m_comm->m_serial->moveToThread(comm_thread);
        comm_thread->start();
 
+      m_x_windows_satrt = X_WINDOWS_START;
+      m_x_windows_size = X_WINDOWS_SIZE;
+      m_x_windows_step = X_WINDOWS_STEP;
+
+      m_y_windows_start = Y_WINDOWS_START;
+      m_y_windows_size = Y_WINDOWS_SIZE;
+      m_y_windows_step = Y_WINDOWS_STEP;
+
 
 
        /*chart*/
@@ -69,18 +78,18 @@ MainWindow::MainWindow(QWidget *parent) :
 
        /*坐标X轴*/
        x = new QValueAxis();
-       /*10秒钟范围*/
-       x->setRange(X_WINDOWS_START,X_WINDOWS_START + X_WINDOWS_SIZE);
+       /*x轴范围*/
+       x->setRange(m_x_windows_satrt,m_x_windows_satrt + m_x_windows_size);
        x->setGridLineVisible(true);
-       x->setTickCount(X_WINDOWS_SIZE / X_WINDOWS_STEP + 1);
-       x->setTitleText("X轴");
+       x->setTickCount(m_x_windows_size / m_x_windows_step + 1);
+       x->setTitleText("X轴  时间/ms");
 
        /*坐标Y轴*/
        y = new QValueAxis();
-       /*-10kg到20kg*/
-       y->setRange(Y_WINDOWS_START,Y_WINDOWS_START + Y_WINDOWS_SIZE);
+       /*y轴范围*/
+       y->setRange(m_y_windows_start,m_y_windows_start + m_y_windows_size);
        y->setGridLineVisible(true);
-       y->setTickCount(Y_WINDOWS_SIZE / Y_WINDOWS_STEP + 1);
+       y->setTickCount(m_y_windows_size / m_y_windows_step + 1);
        y->setTitleText("Y轴");
 
 
@@ -88,11 +97,14 @@ MainWindow::MainWindow(QWidget *parent) :
        Qt::GlobalColor color[communication::LINE_SERVICE_CNT]= { Qt::red,Qt::green,Qt::yellow,Qt::blue};
 
        /*定义所有数据源*/
+       QPen pen;
+       pen.setWidth(2);
+
        for (int i = 0;i < communication::LINE_SERVICE_CNT; i++) {
            service[i] = new QLineSeries();
            service[i]->setColor(color[i]);
            service[i]->setName("未定义");
-
+           service[i]->setPen(pen);
            service[i]->setUseOpenGL(true);
            service[i]->useOpenGL();
 
@@ -165,76 +177,147 @@ void MainWindow::handle_notify_data_stream(QList<QPointF> line)
 {
    QVector<QPointF> s[communication::LINE_SERVICE_CNT];
 
-   int offset = 0,offset_max = 0;
-   int data_cnt;
-   int x_min,x_max;
+   int offset = 0;
 
    QVector<QPointF> vector;
 
-   x_min = x->min();
-   x_max = x->max();
+   m_x_windows_satrt = x->min();
+   int x_windows_end = x->max();
+
+
 
    for (int i = 0;i < communication::LINE_SERVICE_CNT && i < line.size();i ++) {
+
+       /*坐标轴*/
+       offset = line[i].x() - x_windows_end;
+
+       if (offset < 0) {
+           for (int i = 0;i < communication::LINE_SERVICE_CNT;i ++) {
+               service[i]->clear();
+           }
+
+       }
+
        /*每个数据源向量表*/
        s[i] = service[i]->pointsVector();
 
-       /*如果新数据大于坐标轴*/
-       offset = line[i].x() - x_max;
-       if (offset > offset_max) {
-           offset_max = offset;
-       }
        s[i].append(line[i]);
 
-       data_cnt = s[i].size();
-       if (data_cnt > communication::SERVICE_DATA_CNT) {
+       while (s[i].size() > 0 && s[i].first().x() < m_x_windows_satrt) {
             s[i].removeFirst();
        }
+
        service[i]->replace(s[i]);
        /*处理数据显示*/
       ui->data_stream_display->append(QString::number(line[i].x(),'f',0) + "," + QString::number(line[i].y(),'f',0));
     }
+
    if (ui->data_stream_display->document()->lineCount() > 100) {
        ui->data_stream_display->clear();
 
    }
-    if (offset > 0) {
-        x->setRange(x_min + offset,x_max + offset);
-    }
 
 
-
-
+   x->setRange(m_x_windows_satrt + offset,m_x_windows_satrt + m_x_windows_size + offset);
 }
+
+
+
 
 void MainWindow::on_data_stream_display_textChanged()
 {
      ui->data_stream_display->moveCursor(QTextCursor::End);
 }
 
+
+
 void MainWindow::parse_configration(QString file_name)
 {
-    /*解析颜色*/
-    QByteArray file_text;
-    QByteArray temp;
+    /*解析*/
+    QByteArray config_bytes;
+    QString config_text;
 
-    QString color;
-    QString split;
-    QString start,end;
-    int temp_index,split_index,start_index,end_index;
+    QFile *config_file = new QFile(file_name);
+    config_file->open(QIODevice::ReadWrite);
 
+    config_bytes = config_file->readAll();
+    config_text = QString::fromUtf8(config_bytes);
 
-    QFile *open_file = new QFile(file_name);
-    if (open_file->open(QIODevice::ReadOnly)) {
-        file_text = open_file->readAll();
-        if (file_text.contains("[color]")) {
-            temp_index = file_text.indexOf("[color]");
-            split_index = file_text.indexOf("=",temp_index);
-            start_index = file_text.indexOf("\"",split_index);
+    ui->configration_text_display->clear();
+    ui->configration_text_display->setText(config_text);
 
 
+    QSettings *config = new QSettings(file_name, QSettings::IniFormat);
+    config->setIniCodec(QTextCodec::codecForName("UTF-8"));
+
+
+    int x_windows_size = config->value("x_windows_size").toInt();
+    qDebug() << QString("x_windows_size:%1").arg(x_windows_size);
+
+    if (x_windows_size > 0) {
+      m_x_windows_size = x_windows_size;
+    }
+
+    int x_windows_step = config->value("x_windows_step").toInt();
+    qDebug() << QString("x_windows_step:%1").arg(x_windows_step);
+    if (x_windows_step > 0) {
+      m_x_windows_step = x_windows_step;
+    }
+    x->setTickCount(m_x_windows_size / m_x_windows_step + 1);
+
+
+
+    int y_windows_start = config->value("y_windows_start").toInt();
+    qDebug() << QString("y_windows_start:%1").arg(y_windows_start);
+    if (y_windows_start > 0) {
+      m_y_windows_start = y_windows_start;
+    }
+
+    int y_windows_size = config->value("y_windows_size").toInt();
+    qDebug() << QString("y_windows_size:%1").arg(y_windows_size);
+    if (y_windows_size > 0) {
+      m_y_windows_size = y_windows_size;
+    }
+
+    int y_windows_step = config->value("y_windows_step").toInt();
+    qDebug() << QString("y_windows_step:%1").arg(y_windows_step);
+    if (y_windows_step > 0) {
+      m_y_windows_step = y_windows_step;
+    }
+    y->setRange(m_y_windows_start,m_y_windows_start + m_y_windows_size);
+    y->setTickCount(m_y_windows_size / m_y_windows_step + 1);
+
+
+    QString name;
+
+    for (int i = 0;i < communication::LINE_SERVICE_CNT;i ++) {
+        name = config->value("chn" + QString::number(i + 1) + "_name").toString();
+
+        if (!name.isEmpty()) {
+            qDebug() << QString("chn" + QString::number(i + 1) + "_name:%1").arg(name);
+            service[i]->setName(name);
         }
     }
 
+    QString color;
+    for (int i = 0;i < communication::LINE_SERVICE_CNT;i ++) {
+        color = config->value("chn" + QString::number(i + 1) + "_color").toString();
+
+        if (!color.isEmpty()) {
+
+            qDebug() << QString("chn" + QString::number(i + 1) + "_color:%1").arg(color);
+            if (color.compare("red") == 0) {
+                service[i]->setColor(Qt::red);
+            } else if (color.compare("green") == 0) {
+                service[i]->setColor(Qt::green);
+            }else if (color.compare("yellow") == 0) {
+                service[i]->setColor(Qt::yellow);
+            }else if (color.compare("blue") == 0) {
+                service[i]->setColor(Qt::blue);
+            }
+
+        }
+    }
 }
 
 
@@ -244,7 +327,7 @@ void MainWindow::on_open_configration_button_clicked()
 
     QString path;
     /*上次路径*/
-    QSettings *setting = new QSettings("./Setting.ini", QSettings::IniFormat);  //QSettings能记录一些程序中的信息，下次再打开时可以读取出来
+    QSettings *setting = new QSettings("./setting.ini", QSettings::IniFormat);  //QSettings能记录一些程序中的信息，下次再打开时可以读取出来
     /*文件选择对话框*/
     QFileDialog *file_dialog = new QFileDialog(this);
 
@@ -296,6 +379,8 @@ void MainWindow::save_configration()
          new_file->write(new_text);
 
          new_file->close();
+         parse_configration(file_name);
+
         }
 
 

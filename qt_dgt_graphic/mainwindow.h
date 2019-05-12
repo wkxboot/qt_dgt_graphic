@@ -29,7 +29,9 @@ public:
 
         Y_WINDOWS_START = 0,
         Y_WINDOWS_SIZE = 20000,
-        Y_WINDOWS_STEP = 1000
+        Y_WINDOWS_STEP = 1000,
+
+        DATA_STREAM_SIZE = 100
 
     };
 
@@ -58,11 +60,13 @@ private:
     QValueAxis *x;
     QValueAxis *y;
 
-    int x_windows_size;
-    int y_windows_size;
-    int x_windows_step;
-    int y_windows_step;
+    int m_x_windows_satrt;
+    int m_x_windows_size;
+    int m_x_windows_step;
 
+    int m_y_windows_size;
+    int m_y_windows_step;
+    int m_y_windows_start;
 };
 
 #endif // MAINWINDOW_H
