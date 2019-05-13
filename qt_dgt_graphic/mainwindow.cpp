@@ -74,7 +74,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
        /*chart*/
        QChart *dgt_graphic = new QChart();
-
+       dgt_graphic->setAnimationOptions(QChart::NoAnimation);
 
        /*坐标X轴*/
        x = new QValueAxis();
@@ -100,13 +100,16 @@ MainWindow::MainWindow(QWidget *parent) :
        QPen pen;
        pen.setWidth(2);
 
+
        for (int i = 0;i < communication::LINE_SERVICE_CNT; i++) {
            service[i] = new QLineSeries();
-           service[i]->setColor(color[i]);
-           service[i]->setName("未定义");
+           pen.setColor(color[i]);
            service[i]->setPen(pen);
+
+           service[i]->setName("未定义");
+
            service[i]->setUseOpenGL(true);
-           service[i]->useOpenGL();
+           qDebug() << "use opengl:" << service[i]->useOpenGL();
 
            dgt_graphic->addSeries(service[i]);
            dgt_graphic->setAxisX(x,service[i]);
@@ -182,43 +185,41 @@ void MainWindow::handle_notify_data_stream(QList<QPointF> line)
    QVector<QPointF> vector;
 
    m_x_windows_satrt = x->min();
-   int x_windows_end = x->max();
-
-
 
    for (int i = 0;i < communication::LINE_SERVICE_CNT && i < line.size();i ++) {
 
        /*坐标轴*/
-       offset = line[i].x() - x_windows_end;
+       offset = line[i].x() - x->max();;
 
        if (offset < 0) {
            for (int i = 0;i < communication::LINE_SERVICE_CNT;i ++) {
                service[i]->clear();
            }
 
-       }
+       } else {
+           /*每个数据源向量表*/
+           s[i] = service[i]->pointsVector();
 
-       /*每个数据源向量表*/
-       s[i] = service[i]->pointsVector();
+           s[i].append(line[i]);
 
-       s[i].append(line[i]);
+           while (s[i].size() > 0 && s[i].first().x() < m_x_windows_satrt) {
+                s[i].removeFirst();
+           }
 
-       while (s[i].size() > 0 && s[i].first().x() < m_x_windows_satrt) {
-            s[i].removeFirst();
-       }
-
-       service[i]->replace(s[i]);
-       /*处理数据显示*/
-      ui->data_stream_display->append(QString::number(line[i].x(),'f',0) + "," + QString::number(line[i].y(),'f',0));
+           service[i]->replace(s[i]);
+           /*处理数据显示*/
+           ui->data_stream_display->append(QString::number(line[i].x(),'f',0) + "," + QString::number(line[i].y(),'f',0));
+        }
     }
 
-   if (ui->data_stream_display->document()->lineCount() > 100) {
-       ui->data_stream_display->clear();
-
-   }
 
 
-   x->setRange(m_x_windows_satrt + offset,m_x_windows_satrt + m_x_windows_size + offset);
+    if (ui->data_stream_display->document()->lineCount() > 100) {
+        ui->data_stream_display->clear();
+    }
+
+
+     x->setRange(m_x_windows_satrt + offset,m_x_windows_satrt + m_x_windows_size + offset);
 }
 
 
@@ -226,7 +227,7 @@ void MainWindow::handle_notify_data_stream(QList<QPointF> line)
 
 void MainWindow::on_data_stream_display_textChanged()
 {
-     ui->data_stream_display->moveCursor(QTextCursor::End);
+    ui->data_stream_display->moveCursor(QTextCursor::End);
 }
 
 
