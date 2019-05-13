@@ -24,8 +24,8 @@ public:
     ~MainWindow();
     enum {
         X_WINDOWS_START = 0,
-        X_WINDOWS_SIZE = 2000,
-        X_WINDOWS_STEP = 200,
+        X_WINDOWS_SIZE = 5000,
+        X_WINDOWS_STEP = 500,
 
         Y_WINDOWS_START = 0,
         Y_WINDOWS_SIZE = 20000,
@@ -60,7 +60,7 @@ private:
     QValueAxis *x;
     QValueAxis *y;
 
-    int m_x_windows_satrt;
+    int m_x_windows_start;
     int m_x_windows_size;
     int m_x_windows_step;
 

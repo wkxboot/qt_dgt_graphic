@@ -62,7 +62,7 @@ MainWindow::MainWindow(QWidget *parent) :
        m_comm->m_serial->moveToThread(comm_thread);
        comm_thread->start();
 
-      m_x_windows_satrt = X_WINDOWS_START;
+      m_x_windows_start = X_WINDOWS_START;
       m_x_windows_size = X_WINDOWS_SIZE;
       m_x_windows_step = X_WINDOWS_STEP;
 
@@ -79,7 +79,7 @@ MainWindow::MainWindow(QWidget *parent) :
        /*坐标X轴*/
        x = new QValueAxis();
        /*x轴范围*/
-       x->setRange(m_x_windows_satrt,m_x_windows_satrt + m_x_windows_size);
+       x->setRange(m_x_windows_start,m_x_windows_start + m_x_windows_size);
        x->setGridLineVisible(true);
        x->setTickCount(m_x_windows_size / m_x_windows_step + 1);
        x->setTitleText("X轴  时间/ms");
@@ -178,48 +178,56 @@ void MainWindow::handle_open_port_rsp(int rc,int code)
 /*处理数据流*/
 void MainWindow::handle_notify_data_stream(QList<QPointF> line)
 {
-   QVector<QPointF> s[communication::LINE_SERVICE_CNT];
+    QVector<QPointF> pre[communication::LINE_SERVICE_CNT];
+    QVector<QPointF> now[communication::LINE_SERVICE_CNT];
+    QPointF temp;
 
-   int offset = 0;
+    int x_windows_end = m_x_windows_start + m_x_windows_size;
+    static int last_x = x_windows_end;
+    int temp_x = 0;
 
-   QVector<QPointF> vector;
+    int offset = 0;
+    for (int i = 0;i < communication::LINE_SERVICE_CNT && i < line.size();i ++) {
 
-   m_x_windows_satrt = x->min();
+        /*坐标轴*/
+        offset = line[i].x() - x_windows_end;
+        /*处理数据显示*/
+        ui->data_stream_display->append(QString::number(line[i].x(),'f',0) + "," + QString::number(line[i].y(),'f',0));
 
-   for (int i = 0;i < communication::LINE_SERVICE_CNT && i < line.size();i ++) {
+        if (offset <= 0) {
+            service[i]->append(line[i]);
+        } else {
+            offset = line[i].x() - last_x;
+            temp_x = line[i].x();
 
-       /*坐标轴*/
-       offset = line[i].x() - x->max();;
+            line[i].setX(x_windows_end);
 
-       if (offset < 0) {
-           for (int i = 0;i < communication::LINE_SERVICE_CNT;i ++) {
-               service[i]->clear();
-           }
+            /*每个数据源向量表*/
+            pre[i] = service[i]->pointsVector();
+            for (int k = 0; k < pre[i].size();k ++) {
+                temp.setX(pre[i].at(k).x() - offset);
+                temp.setY(pre[i].at(k).y() );
+                now[i].append(temp);
+            }
 
-       } else {
-           /*每个数据源向量表*/
-           s[i] = service[i]->pointsVector();
+            now[i].append(line[i]);
 
-           s[i].append(line[i]);
+            if (now[i].first().x() < m_x_windows_start) {
+                now[i].removeFirst();
+            }
 
-           while (s[i].size() > 0 && s[i].first().x() < m_x_windows_satrt) {
-                s[i].removeFirst();
-           }
-
-           service[i]->replace(s[i]);
-           /*处理数据显示*/
-           ui->data_stream_display->append(QString::number(line[i].x(),'f',0) + "," + QString::number(line[i].y(),'f',0));
+            service[i]->replace(now[i]);
         }
+
+
     }
 
+    last_x = temp_x;
 
-
-    if (ui->data_stream_display->document()->lineCount() > 100) {
+    if (ui->data_stream_display->document()->lineCount() > 1000) {
         ui->data_stream_display->clear();
     }
 
-
-     x->setRange(m_x_windows_satrt + offset,m_x_windows_satrt + m_x_windows_size + offset);
 }
 
 
@@ -265,7 +273,7 @@ void MainWindow::parse_configration(QString file_name)
       m_x_windows_step = x_windows_step;
     }
     x->setTickCount(m_x_windows_size / m_x_windows_step + 1);
-
+    x->setMax(m_x_windows_start + m_x_windows_size);
 
 
     int y_windows_start = config->value("y_windows_start").toInt();

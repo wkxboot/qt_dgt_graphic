@@ -1,6 +1,6 @@
 #include "communication.h"
 #include "qdebug.h"
-
+#include "qdatetime.h"
 
 communication::communication(QObject *parent) : QObject(parent)
 {
@@ -52,7 +52,7 @@ void communication::handle_data_ready()
         value.setX(value_list[0].toInt());
         value.setY(value_list[1].toInt());
         list.append(value);
-        qDebug()<< QString("[data:%1]:%2.").arg(i).arg(data_list.at(i));
+        qDebug()<< QString("[time:%1][data:%2]:%3.").arg(QDateTime::currentMSecsSinceEpoch() ).arg(i).arg(data_list.at(i));
     }
     emit notify_data_stream(list);
 
